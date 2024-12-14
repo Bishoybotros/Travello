@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "930623352397",
+    "project_id": "travello-2ed88",
+    "storage_bucket": "travello-2ed88.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:930623352397:android:9c7e34b734d40440123604",
+        "android_client_info": {
+          "package_name": "com.example.Travello"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAs5pu-La60fsbgpDu2ZVHWbElLnGMfjcw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,186 @@
+Modify the Windows Plugin Code
+Update the C++ code in the Flutter plugin to call the updated function with parameters. Here’s the updated flutter_dll_plugin.cpp:
+
+cpp
+Copy code
+#include <windows.h>
+#include <flutter/method_channel.h>
+#include <flutter/plugin_registrar_windows.h>
+
+#include <memory>
+#include <sstream>
+#include <vector>
+
+namespace flutter_dll_plugin {
+
+typedef std::pair<double, double> (*PredictPointsFunction)(const char*);
+
+class FlutterDllPlugin : public flutter::Plugin {
+ public:
+  static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
+
+  FlutterDllPlugin();
+
+  virtual ~FlutterDllPlugin();
+
+ private:
+  HMODULE dll_handle_;
+  PredictPointsFunction predict_points_;
+
+  // Called when a method is called on this plugin's channel from Dart.
+  void HandleMethodCall(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+};
+
+// static
+void FlutterDllPlugin::RegisterWithRegistrar(
+    flutter::PluginRegistrarWindows *registrar) {
+  auto channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      registrar->messenger(), "flutter_dll_plugin",
+      &flutter::StandardMethodCodec::GetInstance());
+
+  auto plugin = std::make_unique<FlutterDllPlugin>();
+
+  channel->SetMethodCallHandler(
+      [plugin_pointer = plugin.get()](const auto& call, auto result) {
+        plugin_pointer->HandleMethodCall(call, std::move(result));
+      });
+
+  registrar->AddPlugin(std::move(plugin));
+}
+
+FlutterDllPlugin::FlutterDllPlugin() {
+  // Load the DLL
+  dll_handle_ = LoadLibrary(L"example.pyd");
+  if (dll_handle_) {
+    // Get the function address
+    predict_points_ = (PredictPointsFunction)GetProcAddress(dll_handle_, "predict_points");
+  }
+}
+
+FlutterDllPlugin::~FlutterDllPlugin() {
+  if (dll_handle_) {
+    FreeLibrary(dll_handle_);
+  }
+}
+
+void FlutterDllPlugin::HandleMethodCall(
+    const flutter::MethodCall<flutter::EncodableValue>& method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  if (method_call.method_name().compare("predictPoints") == 0) {
+    if (predict_points_) {
+      const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+      if (!arguments) {
+        result->Error("BAD_ARGS", "Expected map with one string value.");
+        return;
+      }
+
+      std::string values = std::get<std::string>((*arguments).at(flutter::EncodableValue("values")));
+
+      auto response = predict_points_(values.c_str());
+      std::vector<double> result_vector = { response.first, response.second };
+      result->Success(flutter::EncodableValue(result_vector));
+    } else {
+      result->Error("DLL_ERROR", "Could not find function in DLL");
+    }
+  } else {
+    result->NotImplemented();
+  }
+}
+
+}  // namespace flutter_dll_plugin
+
+void FlutterDllPluginRegisterWithRegistrar(
+    FlutterDesktopPluginRegistrarRef registrar) {
+  flutter_dll_plugin::FlutterDllPlugin::RegisterWithRegistrar(
+      flutter::PluginRegistrarManager::GetInstance()
+          ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar));
+}
+Step 4: Use the Plugin in Your Flutter Application
+Modify the Dart code to handle the updated response:
+Here's the Dart code to call the plugin method with the required parameter and handle the two values returned:
+
+dart
+Copy code
+import 'package:flutter/material.dart';
+import 'package:flutter_dll_plugin/flutter_dll_plugin.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: MyHomePage(),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  @override
+  _MyHomePageState createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  String _response = 'Response will appear here';
+  final TextEditingController _controller = TextEditingController();
+
+  void _callDll() async {
+    final response = await FlutterDllPlugin.predictPoints(_controller.text);
+    setState(() {
+      _response = 'Predicted coordinates: ${response[0]}, ${response[1]}';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Flutter DLL Example'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            TextField(
+              controller: _controller,
+              decoration: InputDecoration(
+                hintText: 'Enter values separated by commas',
+              ),
+            ),
+            SizedBox(height: 20),
+            Text(_response),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _callDll,
+              child: Text('Call DLL'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+Update the plugin Dart code to handle the parameter and return the two values:
+Add a method in flutter_dll_plugin.dart to call the native method with the required parameter:
+
+dart
+Copy code
+import 'dart:async';
+import 'package:flutter/services.dart';
+
+class FlutterDllPlugin {
+  static const MethodChannel _channel = MethodChannel('flutter_dll_plugin');
+
+  static Future<List<double>> predictPoints(String values) async {
+    final List response = await _channel.invokeMethod('predictPoints', {
+      'values': values,
+    });
+    return response.cast<double>();
+  }
+}
+Conclusion
+This guide demonstrates how to integrate a Python-based machine learning model into a Flutter application by creating a DLL from the Python code and using a Flutter plugin to call this DLL. The modified Python function now returns two numerical values directly, which are then processed and displayed in the Flutter app.
